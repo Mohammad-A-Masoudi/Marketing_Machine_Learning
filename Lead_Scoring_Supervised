@@ -1,0 +1,492 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[32]:
+
+
+import numpy as np
+import random
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.pyplot import xticks
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import statsmodels.api as sm
+from sklearn.feature_selection import RFE
+from sklearn import metrics
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.model_selection import cross_val_score
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+
+
+# In[76]:
+
+
+class Preprocessing:
+    
+    def __init__(self): 
+        input_data = pd.read_csv("C:/Users/Amin/Desktop/lead-scoring-x-online-education/Leads X Education.csv")
+        self.raw_df = pd.DataFrame(input_data)
+        self.raw_df.drop_duplicates(subset = 'Prospect ID' , inplace = True )
+        self.shape = self.raw_df.shape
+        self.df = pd.DataFrame()
+        
+    def pre_analysis(self):
+        describe = self.raw_df.describe()
+        print(f"Data set has {self.shape[0]} observation rows and {self.shape[1]} columns\n\n\n")
+        print(f"\n\n\nData set Summury:\n\n\n{self.raw_df.info()}\n\n\n{describe}")
+        
+    def cleaning(self):
+        
+        self.df = self.raw_df.replace('Select' , np.nan)  #deleting difault values
+        print('finding missing values:\n\n', self.df.isnull().sum())
+        self.df['Country'].replace(np.nan , self.df["Country"].value_counts().argmax() , inplace = True) #replacing with most repetetive one
+        self.df['Specialization'].replace(np.nan , 'Others', inplace = True)
+        self.df['How did you hear about X Education'].replace(np.nan , 'Others', inplace = True)
+        self.df['What is your current occupation'].replace(np.nan , self.df["What is your current occupation"].value_counts().argmax(), inplace = True)
+        self.df['What matters most to you in choosing a course'].replace(np.nan , self.df["What matters most to you in choosing a course"].value_counts().argmax(), inplace = True)
+        self.df['Tags'].replace(np.nan , self.df["Tags"].value_counts().argmax() , inplace = True)
+        self.df['Lead Quality'].replace(np.nan , 'Not Sure', inplace = True)  #didn't fill it bcs they weren't sure!
+        self.df.drop('Lead Profile', axis = 1, inplace = True) #droping column with too much missig data
+        self.df.drop('Asymmetrique Activity Index', axis = 1, inplace = True) #droping column with too much missig data
+        self.df.drop('Asymmetrique Activity Score', axis = 1, inplace = True) #droping column with too much missig data
+        self.df.drop('Asymmetrique Profile Index', axis = 1, inplace = True) #droping column with too much missig data
+        self.df.drop('Asymmetrique Profile Score', axis = 1, inplace = True) #droping column with too much missig data
+        self.df['City'].replace(np.nan , self.df["City"].value_counts().argmax(), inplace = True)
+        self.df.dropna(inplace = True)
+        if len(self.df['Prospect ID']) == len(self.df['Lead Number']):
+            self.df.drop('Prospect ID', axis = 1 , inplace = True)
+        print('\n after operation:\n\n', self.df.isnull().sum())
+        
+        return self.df
+            
+    
+    def pre_evaluation_numerical_variables(self):
+        
+        corr_matrix = self.df.corr()
+        plt.figure(figsize=(5, 5))
+        sns.heatmap(corr_matrix, cmap="YlGnBu",annot=True)
+
+        plt.show()
+        
+        lg = LogisticRegression()
+        lg.fit(self.df[['Total Time Spent on Website']], self.df[['Converted']])
+        score1 = lg.score(self.df[['Total Time Spent on Website']], self.df[['Converted']])
+        
+        lg1 = LogisticRegression()
+        lg1.fit(self.df[[ 'TotalVisits']], self.df[['Converted']])
+        score2 = lg1.score(self.df[['TotalVisits']], self.df[['Converted']])
+        
+        lg2 = LogisticRegression()
+        lg2.fit(self.df[['Page Views Per Visit']], self.df[['Converted']])
+        score3 = lg2.score(self.df[["Page Views Per Visit"]], self.df[['Converted']])
+        
+        scores=[score1,score2,score3]
+        
+        self.df.drop(['TotalVisits','Page Views Per Visit'], axis = 1, inplace = True)
+        
+        
+        
+        print("Maximum accuracy is for the model number", np.argmax(scores)+1 , "=" , max(scores))
+        plt.figure(figsize=(5, 5))
+        sns.boxplot(x='Converted', y='Total Time Spent on Website', data=self.df)
+        plt.show()
+        return self.df
+    
+
+    
+    def pre_evaluation_categorical_variables(self):
+        
+        #Controling Binary Variables
+        fig, axs = plt.subplots(7,2, figsize = (16,10))
+        plt1 = sns.catplot(y='Do Not Email', data=self.df, kind="count", ax = axs[0,0])
+        plt2 = sns.countplot(x = 'Do Not Call' , hue = 'Converted', data = self.df ,ax = axs[0,1])
+        plt3 = sns.countplot(x = 'Search' , hue = 'Converted', data = self.df ,ax = axs[1,0])
+        plt4 = sns.countplot(x = 'Magazine' , hue = 'Converted', data = self.df ,ax = axs[1,1])
+        plt5 = sns.countplot(x = 'Newspaper Article' , hue = 'Converted', data = self.df ,ax = axs[2,0])
+        plt6 = sns.countplot(x = 'X Education Forums' , hue = 'Converted', data = self.df ,ax = axs[2,1])
+        plt7 = sns.countplot(x = 'Newspaper' , hue = 'Converted', data = self.df ,ax = axs[3,0])
+        plt8 = sns.countplot(x =  'Digital Advertisement' , hue = 'Converted', data = self.df ,ax = axs[3,1])
+        plt9 = sns.countplot(x = 'Through Recommendations', hue = 'Converted', data = self.df ,ax = axs[4,0])
+        plt10 = sns.countplot(x =  'Receive More Updates About Our Courses' , hue = 'Converted', data = self.df ,ax = axs[4,1])
+        plt11 = sns.countplot(x = 'Update me on Supply Chain Content' , hue = 'Converted', data = self.df ,ax = axs[5,0])
+        plt12 = sns.countplot(x = 'Get updates on DM Content' , hue = 'Converted', data = self.df ,ax = axs[5,1])
+        plt13 = sns.countplot(x =  'I agree to pay the amount through cheque', hue = 'Converted', data = self.df ,ax = axs[6,0])
+        plt14 = sns.countplot(x = 'A free copy of Mastering The Interview' , hue = 'Converted', data = self.df ,ax = axs[6,1])
+       
+        plt.tight_layout()
+        
+        #Controling Categorical Variables
+        
+        fig1, axs1 = plt.subplots(4,3, figsize = (16,10))
+        plt1 = sns.countplot(x = 'City', hue = 'Converted', data = self.df ,ax = axs1[0,1])
+        plt2 =  sns.catplot(y='Last Notable Activity', data=self.df, kind="count", ax = axs1[0,0])
+        plt3 = sns.catplot(y='Lead Origin', data=self.df, kind="count", ax = axs1[1,0])
+        plt4 = sns.countplot(x = 'Lead Source' , hue = 'Converted', data = self.df ,ax = axs1[0,2])
+        plt5 = sns.countplot(x = 'Last Activity' , hue = 'Converted', data = self.df ,ax = axs1[1,1])
+        plt6 = sns.countplot(x = 'Country' , hue = 'Converted', data = self.df ,ax = axs1[1,2])
+        plt7 = sns.countplot(x = 'Specialization' , hue = 'Converted', data = self.df ,ax = axs1[2,0])
+        plt8 = sns.countplot(x =  'How did you hear about X Education', hue = 'Converted', data = self.df ,ax = axs1[2,1])
+        plt9 = sns.catplot(y='What is your current occupation', data=self.df, kind="count", ax = axs1[3,0])
+        plt10 = sns.countplot(x = 'What matters most to you in choosing a course' , hue = 'Converted', data = self.df ,ax = axs1[2,2])
+        plt11 = sns.countplot(x = 'Tags' , hue = 'Converted', data = self.df ,ax = axs1[3,1])
+        plt12 = sns.countplot(x = 'Lead Quality' , hue = 'Converted', data = self.df ,ax = axs1[3,2])
+
+        plt.tight_layout()
+        
+        #droping those not contributing to the model based on our inference from the plot
+        self.df.drop(['Do Not Call','What matters most to you in choosing a course','Search','Magazine','Newspaper Article','X Education Forums','Newspaper','Digital Advertisement','Through Recommendations','Receive More Updates About Our Courses','Update me on Supply Chain Content', 'Get updates on DM Content','I agree to pay the amount through cheque','Country' , 'City', 'How did you hear about X Education'],axis = 1, inplace = True)
+        
+        categ_col =  ['Last Notable Activity', 'Lead Origin', 'Lead Source', 'Last Activity', 'Specialization', 'What is your current occupation' ,'Tags', 'Lead Quality', 'Do Not Email', 'A free copy of Mastering The Interview']
+        dummies = pd.get_dummies(prep.df[categ_col] , drop_first=True)
+        
+        self.df = pd.concat([self.df, dummies], axis=1)
+        
+        return self.df
+        
+        
+        
+    
+
+
+# In[77]:
+
+
+prep = Preprocessing()
+
+
+# In[78]:
+
+
+prep.pre_analysis()
+
+
+# In[79]:
+
+
+prep.cleaning()
+
+
+# In[80]:
+
+
+prep.pre_evaluation_numerical_variables()
+
+
+# In[81]:
+
+
+prep.pre_evaluation_categorical_variables()
+
+
+# In[82]:
+
+
+class Model:
+    
+    def __init__(self):
+        
+        self.X = prep.df.drop(['Lead Number','Converted'] , axis = 1)  #for training set
+        #just numerical and dummies
+        self.X = self.X.drop(['Do Not Email','A free copy of Mastering The Interview','Lead Origin', 'Lead Source', 'Last Activity', 'Specialization','What is your current occupation','Tags','Lead Quality','Last Notable Activity'], axis = 1)
+        self.y = prep.df['Converted']
+        self.X_train = []
+        self.X_test = []
+        self.y_train = []
+        self.y_test = []
+        self.X_train_rfe = []
+        self.X_train_assp = []
+        self.y_train_predicted_assp = []
+        self.rfe_col = []
+        self.X_test_rfe = []
+        self.accuracies_svm = 0
+        self.accuracies_rf = 0
+        self.accuracies_logreg = 0
+        self.log_reg_ref_accu = 0
+        self.log_reg_assp_accu = 0
+        self.rf_accu = 0
+        self.svm_accu = 0
+        self.confusion_matrix_test_assp = 0
+        self.confusion_matrix_test_rfe = 0
+        self.confusion_matrix_svm = 0
+        self.confusion_matrix_rf = 0
+        self.y_test_pred_rfe_prob = []
+        
+    def train_test(self):
+        
+        self.X_train , self.X_test , self.y_train, self.y_test = train_test_split(self.X, self.y, train_size=0.8, test_size=0.2, random_state=100)
+        scaler = StandardScaler()
+        self.X_train[['Total Time Spent on Website']] = scaler.fit_transform(self.X_train[['Total Time Spent on Website']])
+        self.X_test[['Total Time Spent on Website']] = scaler.fit_transform(self.X_test[['Total Time Spent on Website']])
+        return self.X_train, self.X_test, self.y_train, self.y_test
+        
+    def model_eval(self):
+        
+        log_model = sm.GLM(self.y_train,(sm.add_constant(self.X_train)), family = sm.families.Binomial())
+        fitted_line = log_model.fit()
+        print(fitted_line.summary())
+        
+    def run_model_assumption(self):  #model based on our result of model_eval; p-values < 0.1
+        
+        x_assp =self.X_train[['Total Time Spent on Website','Lead Origin_Landing Page Submission','Lead Source_Welingak Website','Tags_Busy','Tags_Closed by Horizzon','Tags_Lost to EINS','Tags_Will revert after reading the email','Tags_in touch with EINS','Tags_opp hangup','Lead Quality_Might be','Lead Quality_Not Sure','Lead Quality_Worst','Do Not Email_Yes']]
+        self.X_train_assp = sm.add_constant(x_assp)
+        lg_assp = sm.GLM(self.y_train, self.X_train_assp , family = sm.families.Binomial())
+        fit_assp = lg_assp.fit()
+        print(fit_assp.summary()) 
+        y_train_predicted_assp_prob = fit_assp.predict(self.X_train_assp)
+        self.y_train_predicted_assp = y_train_predicted_assp_prob.map(lambda x: 1 if x>0.5 else 0)
+        confusion_matrix_assp = metrics.confusion_matrix(self.y_train,self.y_train_predicted_assp)
+        
+        print('Training...')
+        print(confusion_matrix_assp)
+        print('accuracy score of our assumption model in training mode is:', metrics.accuracy_score(self.y_train,self.y_train_predicted_assp))
+        print('Testing...')
+        X_test_assp = self.X_test[['Total Time Spent on Website','Lead Origin_Landing Page Submission','Lead Source_Welingak Website','Tags_Busy','Tags_Closed by Horizzon','Tags_Lost to EINS','Tags_Will revert after reading the email','Tags_in touch with EINS','Tags_opp hangup','Lead Quality_Might be','Lead Quality_Not Sure','Lead Quality_Worst','Do Not Email_Yes']]
+        X_test_assp = sm.add_constant(X_test_assp)
+        y_test_pred_assp_prob = fit_assp.predict(X_test_assp)
+        y_test_pred_assp = y_test_pred_assp_prob.map(lambda x: 1 if x>0.5 else 0)
+        self.confusion_matrix_test_assp = metrics.confusion_matrix(self.y_test,y_test_pred_assp)
+        print(self.confusion_matrix_test_assp)
+        print('accuracy score of our assumption model in testing mode is:', metrics.accuracy_score(self.y_test,y_test_pred_assp))
+        
+        self.log_reg_assp_accu = metrics.accuracy_score(self.y_test,y_test_pred_assp)
+    
+    def rfe_eval(self):
+        
+        logr = LogisticRegression()
+        rfe = RFE(logr, 16)
+        fitted_rfe = rfe.fit(self.X_train, self.y_train)
+        self.rfe_col = self.X_train.columns[fitted_rfe.support_]
+        self.X_train_rfe = self.X_train[self.rfe_col]
+        
+        return fitted_rfe.support_, self.X_train_rfe
+    
+    def run_model_rfe(self):
+        
+        log_model = sm.GLM(self.y_train,(sm.add_constant(self.X_train_rfe)), family = sm.families.Binomial())  #first_model
+#        print(log_model.fit().summary())
+        
+        self.X_train_rfe.drop('Tags_number not provided',axis =1, inplace = True)
+        log_model2 = sm.GLM(self.y_train,(sm.add_constant(self.X_train_rfe)), family = sm.families.Binomial())  #second_model
+#        print(log_model2.fit().summary())
+        
+        self.X_train_rfe.drop('Tags_Lateral student',axis =1, inplace = True)
+        log_model3 = sm.GLM(self.y_train,(sm.add_constant(self.X_train_rfe)), family = sm.families.Binomial())  #third_model
+#        print(log_model3.fit().summary())
+        
+        self.X_train_rfe.drop('Tags_invalid number',axis =1, inplace = True)
+        log_model4 = sm.GLM(self.y_train,(sm.add_constant(self.X_train_rfe)), family = sm.families.Binomial())  #fourth_model
+#        print(log_model4.fit().summary())
+                
+        x_rfe = self.X_train_rfe.drop('Tags_wrong number given',axis =1)
+        self.X_train_rfe = sm.add_constant(x_rfe)
+        log_model5 = sm.GLM(self.y_train,(sm.add_constant(self.X_train_rfe)), family = sm.families.Binomial())  #fifth_model
+        fit_rfe = log_model5.fit()
+        print(fit_rfe.summary())
+        
+        vif = pd.DataFrame()
+        vif['Features'] = self.X_train_rfe.columns
+        vif['VIF'] = [variance_inflation_factor(self.X_train_rfe.values, i) for i in range(self.X_train_rfe.shape[1])]
+        vif['VIF'] = round(vif['VIF'], 2)
+        vif = vif.sort_values(by = "VIF", ascending = False)
+        print('\n\n\n',vif,'\n\n\n')
+        
+        
+        y_train_predicted_rfe_prob = fit_rfe.predict(self.X_train_rfe)
+        self.y_train_predicted_rfe = y_train_predicted_rfe_prob.map(lambda x: 1 if x>0.5 else 0)
+        confusion_matrix_rfe = metrics.confusion_matrix(self.y_train,self.y_train_predicted_rfe)
+        
+        self.accuracies_logreg = cross_val_score(estimator = LogisticRegression() , X = self.X_train_rfe, y = self.y_train, cv = 10, n_jobs = -1)
+        
+        
+        print('Training...')
+        print(confusion_matrix_rfe)
+        print('accuracy score of our rfe model in training mode is:', metrics.accuracy_score(self.y_train,self.y_train_predicted_rfe))
+        print('Testing...')
+        X_test_rfe = self.X_test[self.rfe_col]
+        X_test_rfe.drop(['Tags_number not provided','Tags_Lateral student','Tags_invalid number','Tags_wrong number given'], axis = 1, inplace = True)
+        self.X_test_rfe = sm.add_constant(X_test_rfe)
+        self.y_test_pred_rfe_prob = fit_rfe.predict(self.X_test_rfe)
+        y_test_pred_rfe = self.y_test_pred_rfe_prob.map(lambda x: 1 if x>0.5 else 0)
+        self.confusion_matrix_test_rfe = metrics.confusion_matrix(self.y_test,y_test_pred_rfe)
+        print(self.confusion_matrix_test_rfe)
+        print('accuracy score of our rfe model in testing mode is:', metrics.accuracy_score(self.y_test,y_test_pred_rfe))
+        
+        self.log_reg_ref_accu = metrics.accuracy_score(self.y_test,y_test_pred_rfe)
+        
+
+        
+    
+    def random_forest(self):
+        
+        random.seed(1)
+        randomforest = RandomForestClassifier()
+        print("Training...")
+        randomforest.fit(self.X_train_rfe,self.y_train)
+        y_train_predicted_rf_rfe = randomforest.predict(self.X_train_rfe)
+        accuracy_train = metrics.accuracy_score(self.y_train, y_train_predicted_rf_rfe)
+        confusion_matrix_rf_train = metrics.confusion_matrix(self.y_train, y_train_predicted_rf_rfe)
+        print('accuracy score_rf:' , accuracy_train,'\n','Confusion_Matrix_rf\n',confusion_matrix_rf_train ) 
+        self.accuracies_rf = cross_val_score(estimator = randomforest , X = self.X_train_rfe, y = self.y_train, cv = 10, n_jobs = -1)
+        
+        print("Testing...")
+        y_test_predicted_rf_rfe = randomforest.predict(self.X_test_rfe)
+        accuracy = metrics.accuracy_score(self.y_test, y_test_predicted_rf_rfe)
+        self.confusion_matrix_rf = metrics.confusion_matrix(self.y_test, y_test_predicted_rf_rfe)
+        print('accuracy score_rf:' , accuracy,'\n','Confusion_Matrix_rf\n',self.confusion_matrix_rf )
+        self.rf_accu =  accuracy
+        
+    def svm(self):
+        
+        clf = SVC()
+        print("Training...")
+        clf.fit(self.X_train_rfe,self.y_train)
+        y_train_predicted_svm_rfe = clf.predict(self.X_train_rfe)
+        accuracy_train = metrics.accuracy_score(self.y_train, y_train_predicted_svm_rfe)
+        confusion_matrix_svm_train = metrics.confusion_matrix(self.y_train, y_train_predicted_svm_rfe)
+        print('accuracy score_svm:' , accuracy_train,'\n','Confusion_Matrix_svm\n',confusion_matrix_svm_train )
+        
+        self.accuracies_svm = cross_val_score(estimator = clf , X = self.X_train_rfe, y = self.y_train, cv = 10, n_jobs = -1)
+        
+        print("Testing...")
+        y_test_predicted_svm_rfe = clf.predict(self.X_test_rfe)
+        accuracy = metrics.accuracy_score(self.y_test, y_test_predicted_svm_rfe)
+        self.confusion_matrix_svm = metrics.confusion_matrix(self.y_test, y_test_predicted_svm_rfe)
+        print('accuracy score_svm:' , accuracy,'\n','Confusion_Matrix_svm\n',self.confusion_matrix_svm )
+        self.svm_accu = accuracy
+        
+        
+        
+        
+        
+        
+
+
+# In[83]:
+
+
+model = Model()
+
+
+# In[84]:
+
+
+model.train_test()
+
+
+# In[85]:
+
+
+model.model_eval()
+
+
+# In[86]:
+
+
+model.run_model_assumption()
+
+
+# In[87]:
+
+
+model.rfe_eval()
+
+
+# In[88]:
+
+
+model.run_model_rfe()
+
+
+# In[89]:
+
+
+model.random_forest()
+model.svm()
+
+
+# In[90]:
+
+
+class Visualization:
+    def __init__(self):
+        pass
+    
+    def accu_viz(self):
+        
+        fig = plt.figure(figsize = (16,10))
+        graph = fig.add_subplot(111)
+        graph.set_title('Evaluation', fontsize = 15)
+
+        plt.bar(1, model.log_reg_assp_accu, width = 0.2, color='r', align = 'center', label = 'log_reg_assp')
+        plt.bar(3, model.log_reg_ref_accu, width = 0.2, color='g', align = 'center', label = 'log_reg_ref')
+        plt.bar(5, model.rf_accu, width = 0.2, color='c', align = 'center', label = 'rf_accu')
+        plt.bar(7, model.svm_accu , width = 0.2, color='c', align = 'center', label = 'svm_accu')
+        plt.legend()
+        plt.show()
+ 
+    def ten_fold(self):
+        n = [0,1,2,3,4,5,6,7,8,9]        
+        plt.figure(figsize=(5, 5))
+        plt.plot(n, model.accuracies_svm, 'r-', marker = 'o', label = 'svm')
+        plt.plot(n, model.accuracies_logreg, 'm-', marker = '*', label = 'logreg')
+        plt.plot(n, model.accuracies_rf, 'k-', marker = '+', label = 'rf')
+        plt.xlabel('ten fold')
+        plt.ylabel('accuracy')
+        plt.legend(loc='upper left', bbox_to_anchor=(1, 0.8), shadow=True, ncol=1)
+        plt.title('Ten fold cross validation')
+        plt.show()
+        
+    def hot_leads(self):
+        
+        prob = model.y_test_pred_rfe_prob
+        hot_leads_index = []
+        hot_leads_value = []
+        for leads in range(len(prob)):
+            if prob.values[leads] >= 0.9:
+                hot_leads_index.append(prob.index[leads])
+                hot_leads_value.append(prob.values[leads])
+        hot_leads_value = [x*100 for x in hot_leads_value]
+        hl_dic = {"Hot Leads Number": hot_leads_index, 'Chance': hot_leads_value  }
+        hl_df = pd.DataFrame(hl_dic, columns = ["Hot Leads Number",'Chance'])
+        
+        return hl_df
+
+        
+
+
+# In[91]:
+
+
+viz = Visualization()
+viz.ten_fold()
+
+
+# In[92]:
+
+
+
+viz.hot_leads()
+
+
+# In[67]:
+
+
+
+
+
+# In[65]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
